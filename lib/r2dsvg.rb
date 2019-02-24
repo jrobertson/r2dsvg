@@ -18,10 +18,26 @@ text {fill: red, size: 20}
 
 CSS
 
+module SvgleX
+  
+  refine Svgle::Element do
+    
+    def obj=(object)
+      @obj = object
+    end
+    
+    def obj()
+      @obj
+    end
+    
+  end
+  
+end
 
 class R2dSvg
   include Ruby2D
   using ColouredText
+  using SvgleX
 
   class Render < DomRender
     
@@ -37,8 +53,19 @@ class R2dSvg
         h
       end
 
-      [:embed_audio, sources ]
+      [:embed_audio, sources, e]
     end    
+    
+    def image(e, attributes, raw_style)
+
+      style = style_filter(attributes).merge(raw_style)
+      h = attributes
+
+      x, y, width, height = %i(x y width height).map{|x| h[x] ? h[x].to_i : nil }
+      src = h[:'xlink:href']
+
+      [:draw_image, [x, y, width, height], src, style, e, render_all(e)]
+    end       
 
     def rect(e, attributes, raw_style)
 
@@ -49,7 +76,7 @@ class R2dSvg
       x1, y1, width, height = %i(x y width height).map{|x| h[x].to_i }
       x2, y2, = x1 + width, y1 + height
 
-      [:draw_rectangle, [x1, y1, x2, y2], style, render_all(e)]
+      [:draw_rectangle, [x1, y1, x2, y2], style, e, render_all(e)]
     end
     
     def script(e, attributes, style)
@@ -73,7 +100,7 @@ class R2dSvg
 
       x, y = %i(x y).map{|x| attributes[x].to_i }
 
-      [:draw_text, [x, y], e.text, style, render_all(e)]
+      [:draw_text, [x, y], e.text, style, e, render_all(e)]
     end        
         
     private
@@ -100,9 +127,35 @@ class R2dSvg
 
     end
     
+    def draw_image(args)
+
+      dimensions, src, style, e = args
+
+      x, y, width, height = dimensions      
+      
+      filepath = Tempfile.new('r2dsvg').path + File.basename(src)
+      puts 'filepath: ' + filepath.inspect if @debug
+      File.write filepath, RXFHelper.read(src).first
+        
+      
+      if File.exists? filepath then
+
+        obj = Image.new(
+          filepath,
+          x: x, y: y,
+          width: width, height: height,
+          color: style[:fill],
+          z: style[:"z-index"].to_i
+        )        
+
+        e.obj = obj if e.respond_to? :obj=
+        @window.add obj
+      end
+    end     
+    
     def draw_rectangle(args)
 
-      coords, style = args
+      coords, style, e = args
 
       x1, y1, x2, y2 = coords
 
@@ -111,18 +164,20 @@ class R2dSvg
         puts ('style: ' + style.inspect).debug 
       end 
 
-      @window.add Rectangle.new(
+      obj = Rectangle.new(
         x: x1, y: y1,
         width: x2 - x1, height: y2 - y1,
         color: style[:fill],
         z: style[:"z-index"].to_i
       )
+      e.obj = obj if e.respond_to? :obj=
+      @window.add obj
 
     end
     
     def draw_text(args)
 
-      coords, text, style = args
+      coords, text, style, e = args
 
       x, y = coords
 
@@ -131,14 +186,16 @@ class R2dSvg
         puts ('style: ' + style.inspect).debug 
       end 
      
-      @window.add Text.new(
+      obj = Text.new(
         text,
         x: x, y: y,
         #font: 'vera.ttf',
         size: style[:font_size].to_i,
         color: style[:color],
         z: style[:"z-index"].to_i
-      )      
+      )
+      e.obj = obj
+      @window.add obj
 
     end
     
@@ -147,21 +204,33 @@ class R2dSvg
 
     def embed_audio(args)
       
-      sources, _ = args
+      sources, e = args
 
       if @debug then
         puts 'sources: ' + sources.inspect if @debug
         puts 'inside embed_audio'.info
       end 
      
-      audio = sources.find do |source|
-        File.exists? source[:src]
+      
+      audio_files = sources.map do |source|
+        
+        filepath = Tempfile.new('r2dsvg').path + File.basename(source[:src])
+        File.write filepath, RXFHelper.read(source[:src]).first
+        filepath
       end
+      
+      audio = audio_files.find {|file| File.exists? file }
       
       return unless audio
       
-      file = File.exists? audio[:src]? audio[:src] : nil
-      @window.add = Sound.new(file)
+      file = File.exists?(audio) ? audio : nil
+      puts 'file: ' + file.inspect if @debug
+      file = '/tmp/echo.wav'
+      obj = Sound.new(file)
+      e.obj = obj
+      
+      def e.play() self.obj.play()  end
+      #@window.add obj
 
     end     
     
@@ -214,26 +283,38 @@ class R2dSvg
     @width, @height = %i(width height).map{|x| doc.root.attributes[x].to_i }
     window.set title: title, width: @width, height: @height        
     
-    def doc.element_by_id(id)
-      self.root.element("//*[@id='#{id}']")
-    end        
     
     doc.root.xpath('//script').each {|x| eval x.text.unescape }
     
     drawing.render instructions
-        
-    window.on :mouse_move do |event|
 
-      @doc.root.xpath('//*[@onmousemove]').each do |x|
-                  
-        eval x.onmousemove() if x.hotspot? event.x, event.y
-        
-      end
-
+    @doc = doc              
+    
+    window.on(:mouse_move) {|event|  mouse(:move, event) }    
+    
+    window.on(:mouse_down) do |event|
+      mouse :down, event if event.button == :left
     end
 
-    @doc = doc    
+
     window.show
+  end
+  
+  private
+  
+  def mouse(action, event)
+    
+    doc = @doc
+    
+    @doc.root.xpath("//*[@onmouse#{action}]").each do |x|
+
+      #puts 'x.class: ' + x.inspect if @debug
+      if x.obj and x.obj.contains? event.x, event.y then
+        eval x.method(('onmouse' + action.to_s).to_sym).call()
+      end
+    
+    end
+        
   end
 end
 
