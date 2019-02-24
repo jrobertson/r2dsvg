@@ -2,7 +2,7 @@
 
 ## Installation
 
-Follow the [instructions](/snippets/2019/feb/24/create-a-desktop-application-using-the-ruby2d-gem.html#installation) on how to install the ruby2d gem and then `gem install r2dsvg`.
+Follow the [instructions](http://www.jamesrobertson.eu/snippets/2019/feb/24/create-a-desktop-application-using-the-ruby2d-gem.html#installation) on how to install the ruby2d gem and then `gem install r2dsvg`.
 
 ## Example
 
