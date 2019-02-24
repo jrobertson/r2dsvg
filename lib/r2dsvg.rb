@@ -9,6 +9,7 @@ require 'svgle'
 require 'ruby2d'  # experimental gem depends upon simple2d binaries
 require 'dom_render'
 
+
 DEFAULT_CSS = <<CSS
 
 svg {background-color: white}
@@ -225,12 +226,11 @@ class R2dSvg
       
       file = File.exists?(audio) ? audio : nil
       puts 'file: ' + file.inspect if @debug
-      file = '/tmp/echo.wav'
+
       obj = Sound.new(file)
       e.obj = obj
       
       def e.play() self.obj.play()  end
-      #@window.add obj
 
     end     
     
