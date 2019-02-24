@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'r2dsvg'
-  s.version = '0.1.0'
+  s.version = '0.1.1'
   s.summary = 'Experimental gem to render SVG within a Ruby2D application.'
   s.authors = ['James Robertson']
   s.files = Dir['lib/r2dsvg.rb']
