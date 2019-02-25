@@ -57,6 +57,43 @@ class R2dSvg
       [:embed_audio, sources, e]
     end    
     
+    def circle(e, attributes, raw_style)
+
+      style = style_filter(attributes).merge(raw_style)
+
+      h = attributes
+
+      x, y, radius= %i(cx cy r).map{|x| h[x].to_i }
+      fill = h[:fill]
+      
+
+      [:draw_circle, [x, y], radius, fill, style, render_all(e)]
+    end       
+    
+    # not yet implemented
+    #
+    def ellipse(e, attributes, raw_style)
+
+      style = style_filter(attributes).merge(raw_style)
+      h = attributes
+
+      x, y= %i(cx cy).map{|x| h[x].to_i }
+      width = h[:rx].to_i * 2
+      height = h[:ry].to_i * 2
+
+      [:draw_arc, [x, y, width, height], style, render_all(e)]
+    end    
+    
+    def line(e, attributes, raw_style)
+
+      style = style_filter(attributes).merge(raw_style)
+
+      x1, y1, x2, y2 = %i(x1 y1 x2 y2).map{|x| attributes[x].to_i }
+
+      [:draw_line, [x1, y1, x2, y2], style, render_all(e)]
+    end   
+        
+    
     def image(e, attributes, raw_style)
 
       style = style_filter(attributes).merge(raw_style)
@@ -67,6 +104,24 @@ class R2dSvg
 
       [:draw_image, [x, y, width, height], src, style, e, render_all(e)]
     end       
+    
+    def polygon(e, attributes, raw_style)
+
+      style = style_filter(attributes).merge(raw_style)
+      points = attributes[:points].split(/\s+/). \
+                                       map {|x| x.split(/\s*,\s*/).map(&:to_i)}
+
+      [:draw_polygon, points, style, e, render_all(e)]
+    end
+
+    def polyline(e, attributes, raw_style)
+
+      style = style_filter(attributes).merge(raw_style)
+      points = attributes[:points].split(/\s+/). \
+                                       map {|x| x.split(/\s*,\s*/).map(&:to_i)}
+
+      [:draw_lines, points, style, render_all(e)]
+    end      
 
     def rect(e, attributes, raw_style)
 
@@ -128,6 +183,39 @@ class R2dSvg
 
     end
     
+    def draw_arc(args)
+
+      dimensions, style = args
+
+      x, y, width, height = dimensions
+
+      #gc = gc_ini(fill: style[:fill] || :none)
+      #@area.window.draw_arc(gc, 1, x, y, width, height, 0, 64 * 360)
+    end      
+    
+    def draw_circle(args)
+
+      coords, radius, fill, style, e = args
+
+      x1, y1 = coords
+
+      if @debug then
+        puts 'inside draw_circle'.info
+        puts ('style: ' + style.inspect).debug 
+      end 
+
+      obj = Circle.new(
+        x: x1, y: y1,
+        radius: radius,
+        sectors: 32,
+        color: style[:fill],
+        z: style[:"z-index"].to_i
+      )
+      e.obj = obj if e.respond_to? :obj=
+      @window.add obj
+
+    end    
+    
     def draw_image(args)
 
       dimensions, src, style, e = args
@@ -153,6 +241,69 @@ class R2dSvg
         @window.add obj
       end
     end     
+    
+    def draw_line(args)
+
+      coords, style, e = args
+
+      x1, y1, x2, y2 = coords
+
+      if @debug then
+        puts 'inside draw_rectangle'.info
+        puts ('style: ' + style.inspect).debug 
+      end 
+
+      obj = Line.new(
+        x1: x1, y1: y1,
+        x2: x2, y2: y2,
+        width: style[:"stroke-width"].to_f,
+        color: style[:"stroke"],
+        z: style[:"z-index"].to_i
+      ) 
+      
+      e.obj = obj if e.respond_to? :obj=
+      @window.add obj
+      
+    end    
+    
+    def draw_polygon(args)
+
+      points, style, e = args
+
+      puts ('points: ' + points.inspect).debug if @debug      
+      coords = points
+
+      if @debug then
+        puts 'inside draw_polygon'.info
+        puts ('style: ' + style.inspect).debug 
+      end 
+      
+      puts ('coords: ' + coords.inspect).debug if @debug      
+      
+      h = coords.map.with_index do |c2,i|
+
+        %w(x y).zip(c2).map {|key, c| [(key + (i+1).to_s).to_sym, c] }
+        
+      end.flatten(1).to_h
+      puts ('triangle h: ' + h.inspect).debug if @debug      
+
+      puts ('triangle h merged: ' + h.inspect).debug if @debug
+      obj = Triangle.new(h.merge({color: style[:fill], z: style[:"z-index"].to_i}))
+      e.obj = obj if e.respond_to? :obj=
+      @window.add obj
+    end       
+
+
+    # not yet implemented
+    #
+    def draw_lines(args)
+
+      coords, width, style, e = args
+
+      x1, y1, x2, y2 = coords
+
+     
+    end       
     
     def draw_rectangle(args)
 
