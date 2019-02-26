@@ -268,21 +268,20 @@ class R2dSvg
     
     def draw_polygon(args)
 
-      points, style, e = args
+      vertices, style, e = args
 
-      puts ('points: ' + points.inspect).debug if @debug      
-      coords = points
+      puts ('vertices: ' + vertices.inspect).debug if @debug      
 
       if @debug then
         puts 'inside draw_polygon'.info
         puts ('style: ' + style.inspect).debug 
       end 
       
-      puts ('coords: ' + coords.inspect).debug if @debug      
+      puts ('vertices: ' + vertices.inspect).debug if @debug      
       
-      h = coords.map.with_index do |c2,i|
+      h = vertices.map.with_index do |coords,i|
 
-        %w(x y).zip(c2).map {|key, c| [(key + (i+1).to_s).to_sym, c] }
+        %w(x y).zip(coords).map {|key, c| [(key + (i+1).to_s).to_sym, c] }
         
       end.flatten(1).to_h
       puts ('triangle h: ' + h.inspect).debug if @debug      
@@ -424,6 +423,7 @@ class R2dSvg
   def initialize(svg, title: 'R2dSVG', debug: false)
 
     @svg, @debug = svg, debug
+    
     doc = Svgle.new(svg, callback: self, debug: debug)
     instructions = Render.new(doc, debug: debug).to_a
 
@@ -439,17 +439,27 @@ class R2dSvg
     
     drawing.render instructions
 
-    @doc = doc              
+    @doc = doc                  
     
-    window.on(:mouse_move) {|event|  mouse(:move, event) }    
+    window.on(:mouse_move) do |event|
+      mouse :mousemove, event
+      mouse :mouseenter, event
+    end
     
     window.on(:mouse_down) do |event|
-      mouse :down, event if event.button == :left
-    end
-
+      
+      if event.button == :left then
+        
+        # click and mousedown do the same thing
+        mouse :click, event 
+        mouse :mousedown, event
+      end
+      
+    end          
 
     window.show
   end
+  
   
   private
   
@@ -457,16 +467,46 @@ class R2dSvg
     
     doc = @doc
     
-    @doc.root.xpath("//*[@onmouse#{action}]").each do |x|
+    @doc.root.xpath("//*[@on#{action}]").each do |x|
 
       #puts 'x.class: ' + x.inspect if @debug
       if x.obj and x.obj.contains? event.x, event.y then
-        eval x.method(('onmouse' + action.to_s).to_sym).call()
+        
+          
+        if not x.active? then
+          x.active = true
+        elsif action == :mouseenter
+          next
+        end
+                  
+        if block_given? then
+          valid = yield(x)
+          eval x.method(('on' + action.to_s).to_sym).call() if valid
+        else
+          eval x.method(('on' + action.to_s).to_sym).call()
+        end
+        
+      else
+        
+        if x.active? then
+          x.active = false
+          onleave
+        end
       end
     
     end
         
   end
+  
+  def onleave()
+
+    @doc.root.xpath("//*[@onmouseleave]").each do |x|
+      puts 'onleave'.info if @debug
+      eval x.method(:onmouseleave).call()
+    end
+
+  end
+    
 end
 
 
