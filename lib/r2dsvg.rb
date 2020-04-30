@@ -6,6 +6,7 @@
 
 
 require 'svgle'
+require 'onedrb'
 require 'ruby2d'  # experimental gem depends upon simple2d binaries
 require 'dom_render'
 
@@ -399,47 +400,45 @@ class R2dSvg
     private
 
     def draw(a)
+  
+      threads = []
       
       a.each do |rawx|
+  
+        threads << Thread.new do
+          x, *remaining = rawx
 
-        x, *remaining = rawx
-
-        if x.is_a? Symbol then
-          method(x).call(args=remaining)
-        elsif x.is_a? String then
-          draw remaining
-        elsif x.is_a? Array
-          draw remaining
-        else        
-          method(x).call(remaining.take 2)
+          if x.is_a? Symbol then
+            method(x).call(args=remaining)
+          elsif x.is_a? String then
+            draw remaining
+          elsif x.is_a? Array
+            draw remaining
+          else        
+            method(x).call(remaining.take 2)
+          end
         end
-        
+                        
       end
+      
+      threads.join
 
     end
 
   end
+  
+  attr_reader :doc
 
-  def initialize(svg, title: 'R2dSVG', debug: false)
+  def initialize(s, title: 'R2dSVG', debug: false)
 
-    @svg, @debug = svg, debug
+    @debug = debug
     
-    doc = Svgle.new(svg, callback: self, debug: debug)
-    instructions = Render.new(doc, debug: debug).to_a
-
-    window = Window.new        
-    drawing = DrawingInstructions.new window, debug: debug
-    puts ('instructions: ' + instructions.inspect).debug if @debug
-
-    @width, @height = %i(width height).map{|x| doc.root.attributes[x].to_i }
-    window.set title: title, width: @width, height: @height        
+    @window = window = Window.new
     
-    
-    doc.root.xpath('//script').each {|x| eval x.text.unescape }
-    
-    drawing.render instructions
+    @doc = read(s, title)    
 
-    @doc = doc                  
+    drb = OneDrb::Server.new host: '127.0.0.1', port: '57844', obj: self
+    Thread.new { drb.start }
     
     window.on(:mouse_move) do |event|
       mouse :mousemove, event
@@ -458,7 +457,31 @@ class R2dSvg
     end          
 
     window.show
+    
+    
   end
+  
+  def read(s, title=@title)
+
+    svg, _ = RXFHelper.read(s)    
+    doc = Svgle.new(svg, callback: self, debug: @debug)
+    instructions = Render.new(doc, debug: @debug).to_a
+
+ 
+    drawing = DrawingInstructions.new @window, debug: @debug
+    puts ('instructions: ' + instructions.inspect).debug if @debug
+
+    @width, @height = %i(width height).map{|x| doc.root.attributes[x].to_i }
+    @window.set title: title, width: @width, height: @height        
+    
+    Thread.new do
+      doc.root.xpath('//script').each {|x| eval x.text.unescape }      
+      drawing.render instructions    
+    end
+    
+    doc
+    
+  end  
   
   
   private
@@ -481,9 +504,13 @@ class R2dSvg
                   
         if block_given? then
           valid = yield(x)
-          eval x.method(('on' + action.to_s).to_sym).call() if valid
+          statement = x.method(('on' + action.to_s).to_sym).call()
+          puts 'statement: ' + statement.inspect if @debug
+          eval statement if valid
         else
-          eval x.method(('on' + action.to_s).to_sym).call()
+          statement = x.method(('on' + action.to_s).to_sym).call()
+          puts 'statement: ' + statement.inspect if @debug
+          eval statement
         end
         
       else
@@ -505,7 +532,7 @@ class R2dSvg
       eval x.method(:onmouseleave).call()
     end
 
-  end
+  end    
     
 end
 
