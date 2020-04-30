@@ -34,6 +34,20 @@ module SvgleX
     
   end
   
+  refine Svgle::Text do
+    
+    def text=(raw_s)    
+      
+      oldval = @child_elements.first
+
+      r = super(raw_s)
+      self.obj.text = raw_s if oldval != raw_s
+      
+      return r        
+      
+    end
+  end
+  
 end
 
 class R2dSvg
@@ -346,6 +360,7 @@ class R2dSvg
         color: style[:color],
         z: style[:"z-index"].to_i
       )
+      puts 'e: ' + e.inspect
       e.obj = obj
       @window.add obj
 
@@ -401,11 +416,11 @@ class R2dSvg
 
     def draw(a)
   
-      threads = []
+      #threads = []
       
       a.each do |rawx|
   
-        threads << Thread.new do
+        #threads << Thread.new do
           x, *remaining = rawx
 
           if x.is_a? Symbol then
@@ -417,11 +432,11 @@ class R2dSvg
           else        
             method(x).call(remaining.take 2)
           end
-        end
+        #end
                         
       end
       
-      threads.join
+      #threads.join
 
     end
 
@@ -434,35 +449,62 @@ class R2dSvg
     @debug = debug
     
     @window = window = Window.new
+    @loaded = false
     
-    @doc = read(s, title)    
+    read(s, title)    
 
     drb = OneDrb::Server.new host: '127.0.0.1', port: '57844', obj: self
     Thread.new { drb.start }
     
-    window.on(:mouse_move) do |event|
-      mouse :mousemove, event
-      mouse :mouseenter, event
-    end
-    
-    window.on(:mouse_down) do |event|
+    if @loaded then
       
-      if event.button == :left then
-        
-        # click and mousedown do the same thing
-        mouse :click, event 
-        mouse :mousedown, event
+      window.on(:mouse_move) do |event|
+        mouse :mousemove, event
+        mouse :mouseenter, event
       end
       
-    end          
-
+      window.on(:mouse_down) do |event|
+        
+        if event.button == :left then
+          
+          # click and mousedown do the same thing
+          mouse :click, event 
+          mouse :mousedown, event
+        end
+        
+      end          
+    
+      window.on :key_down do |event|
+        # A key was pressed
+        keyboard :keydown, event
+      end
+      
+    end
+=begin     
+    window.on :key_held do |event|
+      # A key is being held down
+      puts event.key
+      keyboard :onkeyheld, event
+    end
+    
+    window.on :key_up do |event|
+      # A key was released
+      puts event.key
+      keyboard :onkeyup, event
+    end    
+=end
     window.show
     
     
   end
   
+  def clear()
+    @window.clear
+  end
+  
   def read(s, title=@title)
-
+    @loaded = false
+    @window.clear
     svg, _ = RXFHelper.read(s)    
     doc = Svgle.new(svg, callback: self, debug: @debug)
     instructions = Render.new(doc, debug: @debug).to_a
@@ -478,13 +520,37 @@ class R2dSvg
       doc.root.xpath('//script').each {|x| eval x.text.unescape }      
       drawing.render instructions    
     end
-    
-    doc
+
+    @loaded = true
+    @doc = doc
     
   end  
   
   
   private
+  
+  def keyboard(action, event)
+    
+    doc = @doc
+    
+    @doc.root.xpath("//*[@on#{action}]").each do |x|
+
+      if block_given? then
+        valid = yield(x)
+        statement = x.method(('on' + action.to_s).to_sym).call()
+        puts 'statement: ' + statement.inspect if @debug
+        eval statement if valid
+      else
+        statement = x.method(('on' + action.to_s).to_sym).call()
+        puts 'statement: ' + statement.inspect if @debug
+        eval statement
+      end
+    
+    end
+    
+    @doc.event[action].each {|name| method(name).call event.key }
+        
+  end  
   
   def mouse(action, event)
     
