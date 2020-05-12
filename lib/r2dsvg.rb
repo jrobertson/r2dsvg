@@ -20,6 +20,28 @@ text {fill: red, size: 20}
 
 CSS
 
+class Svgle
+  
+  class Shape
+
+    def initialize(*args)
+      super(*args)
+      @attr_map ||= {fill: :color}  
+    end
+    
+    def attr_update(name, val)
+      
+      puts 'inside attr_update, @attr_map: ' + @attr_map.inspect if @debug
+      name = (@attr_map[name].to_s + '=').to_sym      
+      @obj.method(name).call(val) if @obj.respond_to? name
+      
+    end
+  end
+
+end
+
+  
+
 module SvgleX
   
   refine Svgle::Element do
@@ -31,8 +53,9 @@ module SvgleX
     def obj()
       @obj
     end
-    
+        
   end
+
   
   refine Svgle::Text do
     
@@ -49,6 +72,9 @@ module SvgleX
   end
   
 end
+
+
+
 
 class R2dSvg
   include Ruby2D
@@ -150,9 +176,7 @@ class R2dSvg
       [:draw_rectangle, [x1, y1, x2, y2], style, e, render_all(e)]
     end
     
-    def script(e, attributes, style)
-      [:script]
-    end     
+   
        
     def svg(e, attributes, raw_style)
 
@@ -411,6 +435,9 @@ class R2dSvg
     def script(args)
 
     end         
+    
+    def style(args)
+    end
 
     private
 
@@ -516,15 +543,23 @@ class R2dSvg
     @width, @height = %i(width height).map{|x| doc.root.attributes[x].to_i }
     @window.set title: title, width: @width, height: @height        
     
-    Thread.new do
+    threads = []
+    
+    threads << Thread.new do
       doc.root.xpath('//script').each {|x| eval x.text.unescape }      
       drawing.render instructions    
     end
+    
+    threads.join
 
     @loaded = true
     @doc = doc
     
   end  
+  
+  def refresh()
+    puts 'do nothing' if @debug
+  end
   
   
   private
@@ -548,7 +583,7 @@ class R2dSvg
     
     end
     
-    @doc.event[action].each {|name| method(name).call event.key }
+    @doc.event[action].each {|name| method(name).call event }
         
   end  
   
