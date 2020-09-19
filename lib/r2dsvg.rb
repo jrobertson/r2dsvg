@@ -52,6 +52,8 @@ class R2dSvg
     
     if @loaded then
       
+      sleep 0.05
+      
       window.on(:mouse_move) do |event|
         mouse :mousemove, event
         mouse :mouseenter, event
@@ -223,6 +225,23 @@ class R2dSvg
     end
 
   end    
+  
+  private
+  
+  def timeout(duration=0.8)
+    
+    @t = Time.now
+    
+    Thread.new do
+
+      while @t + duration > Time.now do        
+        sleep 0.1
+      end
+
+      yield
+        
+    end
+  end  
     
 end
 
